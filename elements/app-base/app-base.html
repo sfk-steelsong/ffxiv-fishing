@@ -1,0 +1,164 @@
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/paper-styles/typography.html">
+
+<dom-module id="app-base">
+  <template>
+    <style include="shared-styles">
+    </style>
+
+    <h1 class="page-title" tabindex="-1">Fish Info</h1>
+    <clock-display eorzea-time="[[eorzeaTime]]" next-change-eorzea="[[nextChangeEorzea]]" next-change-local="[[nextChangeLocal]]"></clock-display>
+    <div>
+      <template is="dom-repeat" items="{{weatherInfo}}">
+        <div>dom-repeat, how does it work? {{item}}</div>
+      </template>
+    </div>
+
+  </template>
+
+  <script>
+    (function() {
+      'use strict';
+
+      Polymer({
+        is: 'app-base',
+
+        properties: {
+          eorzeaDateFactor: {
+            type: Number,
+            value: ((60 * 24) / 70)
+          },
+           hoursToCalc: {
+             type: Number,
+             value: 168 // 24 hours
+           },
+    	     eorzeaTime: Date,
+           nextChangeLocal: Date,
+           nextChangeEorzea: Date,
+           weatherInfo: Array,
+           clockData: Array
+        },
+        ready: function() {
+          // initialize data and kick off clock tick
+          this.eorzeaTime = this.currentTimeEorzea();
+
+          this.calculateAllWeatherStart();
+          this.updateNextChange();
+          this.clockData = this.weatherInfo.slice(0,3);
+
+          this.async(this.clockTick, 1000);
+        },
+        calculateAllWeatherStart: function() {
+          // when to end calculations - hoursToCalc hours after now
+          var endDate = new Date();
+          endDate.setUTCHours(endDate.getUTCHours() + this.hoursToCalc);
+          // convert to eorzea time
+          var endDateEorzea = this.calculateWeatherStep(this.convertLocalToEorzea(endDate));
+
+          // start is technically last window
+          var startDate = new Date(this.calculateWeatherStep(this.eorzeaTime));
+          startDate.setUTCHours(startDate.getUTCHours() - 8);
+          // initalize array with startDate data
+          this.weatherInfo = [];
+          this.weatherInfo.push({
+            time: new Date(startDate),
+            local: new Date(this.convertEorzeaToLocal(startDate)),
+            weather: this.calculateWeatherValue(startDate)
+          });
+
+          var loopTime = startDate;
+          // loop until we hit endDate
+          while (loopTime < endDateEorzea) {
+            // increment time by 8 hours
+            var nextDate = loopTime.setUTCHours(loopTime.getUTCHours() + 8);
+            loopTime = new Date(nextDate);
+            // add calculation to weatherInfo
+            this.weatherInfo.push({
+              time: new Date(loopTime),
+              local: this.convertEorzeaToLocal(loopTime),
+              weather: this.calculateWeatherValue(loopTime)
+            });
+          }
+
+          // add end window
+          this.weatherInfo.push({
+            time: new Date(endDateEorzea),
+            local: new Date(endDate),
+            weather: this.calculateWeatherValue(endDateEorzea)
+          });
+        }
+        ,
+        clockTick: function() {
+          this.eorzeaTime = this.currentTimeEorzea();
+
+          // no need to run calculations every time
+          if (this.eorzeaTime > this.nextChangeEorzea) {
+            // remove current previous weather
+            this.weatherInfo.shift();
+            // calculate next window and push
+            var newDate = new Date(this.weatherInfo[this.weatherInfo.length - 1].time);
+            newDate.setUTCHours(newDate.getUTCHours() + 8);
+            this.weatherInfo.push({
+              time: new Date(newDate),
+              local: this.convertEorzeaToLocal(newDate),
+              weather: this.calculateWeatherValue(newDate)
+            });
+            this.updateNextChange();
+            this.clockData = this.weatherInfo.slice(0,3);
+          }
+
+          this.async(this.clockTick, 1000);
+        },
+        updateNextChange: function() {
+          this.nextChangeEorzea = new Date(this.weatherInfo[2].time); // 0 is previous, 1 is current, 2 is next
+          this.nextChangeLocal = new Date(this.convertEorzeaToLocal(this.nextChangeEorzea));
+        }
+        ,
+        convertLocalToEorzea: function(date) {
+    	     return new Date(date.getTime() * this.eorzeaDateFactor);
+        },
+        convertEorzeaToLocal: function(date) {
+    	     return new Date(date.getTime() / this.eorzeaDateFactor);
+        },
+        currentTimeEorzea: function() {
+          return this.convertLocalToEorzea(new Date());
+        },
+        calculateWeatherStep: function(date) {
+          var time = new Date(date);
+          time.setUTCHours(parseInt(date.getUTCHours() / 8) * 8);
+          time.setUTCMinutes(0);
+          time.setUTCSeconds(0);
+          return time;
+        },
+        calculateWeatherValue: function(date) {
+
+          var time = this.convertEorzeaToLocal(date);
+          // calculations from here: https://www.reddit.com/r/ffxiv/comments/33tqok/cloudy_with_a_chance_of_garlok_predicting_eorzean/
+
+          var unixSeconds = parseInt(time.getTime() / 1000);
+          // Get Eorzea hour for weather start
+          var bell = unixSeconds / 175;
+
+          // Do the magic 'cause for calculations 16:00 is 0, 00:00 is 8 and 08:00 is 16
+          var increment = (bell + 8 - (bell % 8)) % 24;
+
+          // Take Eorzea days since unix epoch
+          var totalDays = unixSeconds / 4200;
+          totalDays = (totalDays << 32) >>> 0; // Convert to uint
+
+          // 0x64 = 100
+          var calcBase = totalDays * 100 + increment;
+
+          // ed: convert below calcs to uint too, otherwise it doesn't quite work
+          // 0xB = 11
+          var step1 = ((calcBase << 11) ^ calcBase) >>> 0; // Convert to uint
+          var step2 = ((step1 >>> 8) ^ step1) >>> 0; // Convert to uint
+
+          // 0x64 = 100
+          return step2 % 100;
+        }
+      });
+    })();
+  </script>
+</dom-module>

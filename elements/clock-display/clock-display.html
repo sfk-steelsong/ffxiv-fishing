@@ -1,0 +1,44 @@
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/paper-styles/typography.html">
+
+<dom-module id="clock-display">
+  <template>
+    <style include="shared-styles">
+    </style>
+    <h2>Clock:</h2>
+    <div>current time: {{filterDate(eorzeaTime)}}</div>
+    <div>next step eorzea: {{filterDate(nextChangeEorzea)}}</div>
+    <div>next step local(UTC, FIX): {{filterDate(nextChangeLocal)}}</div>
+  </template>
+
+  <script>
+    (function() {
+      'use strict';
+
+      Polymer({
+        is: 'clock-display',
+
+        properties: {
+    	     eorzeaTime: {
+             type: Date,
+             notify: true
+           },
+           nextChangeEorzea: {
+             type: Date,
+             notify: true
+           },
+           nextChangeLocal: {
+             type: Date,
+             notify: true
+           }
+        },
+        filterDate: function(value) {
+          if (value) {
+            return ("0" + value.getUTCHours()).slice(-2) + ":" +  ("0" + value.getUTCMinutes()).slice(-2) + ":" +  ("0" + value.getUTCSeconds()).slice(-2);
+          }
+        }
+      });
+    })();
+  </script>
+</dom-module>
